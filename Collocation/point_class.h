@@ -1,4 +1,5 @@
 #include <container.h>
+#include <limits>
 
 #ifndef POINT_CLASS_H
 #define POINT_CLASS_H
@@ -86,6 +87,34 @@ public:
 	void get_point(unsigned int dmi, unsigned int indi){
 		get_point_fields_only(dmi, indi);
 		get_derivatives();
+	}
+};
+
+
+template<class Compactification>
+class Coordinate_Compactified{
+	double comp_end;
+	double xend;
+public:
+	const Compactification &compact;
+
+	Coordinate_Compactified(const Compactification &comp_, const Container *cont):
+		compact(comp_), comp_end(cont->bound[cont->ndomains-1]), xend(cont->bound[cont->ndomains-1]) {};
+
+	double coord(double x){
+		if(x >= xend)
+			return std::numeric_limits<double>::infinity();
+		else if(x < comp_end)
+			return x;
+		else
+			return comp_end + compact.xc(x - comp_end);
+	}
+
+	double comp_coord(double x){
+		if(x < comp_end)
+			return x;
+		else
+			return comp_end + compact.xc_inv(x - comp_end);
 	}
 };
 

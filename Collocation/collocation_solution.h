@@ -11,10 +11,10 @@ private:
 	Container *cont;
 
 public:
-	const Compactification &compactification;
+	const Compactification &compact;
 
-	Collocation_Solution(const Compactification &compact, Container *conti):
-		compactification(compact), cont(conti), pnt(compact, conti) {};
+	Collocation_Solution(const Compactification &compact_, Container *conti):
+		compact(compact_), cont(conti), pnt(compact_, conti) {};
 
 	template<class Callable>
 	void fill_seed(Callable func, double value_at_infinity = 0.0){
@@ -52,17 +52,12 @@ public:
 
 		double x, x_c;
 		double dx = (xmax - xmin)/(1.0*(npoints-1));
-		xmax += dx;
 
 		Evaluator evol(*cont);
+		Coordinate_Compactified<Compactification> coord(compact, cont);
 
-		while(x < xmax){
-			if(x < cont->bound[cont->ndomains-1]){
-				x_c = x;
-			}
-			else{
-				x_c = compactification.xc_inv(x);
-			}
+		for(int i = 0; i < npoints; ++i){
+			x_c = coord.comp_coord(x);
 
 			out << x;
 			for(int fn = 0; fn < cont->nfunc; ++fn)

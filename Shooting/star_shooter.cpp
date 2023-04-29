@@ -92,7 +92,7 @@ int main(int argc, char const *argv[]){
 		pfile << "The start of the coordinate domain is: " << 0.0 << std::endl;
 		pfile << "The end of the coordinate domain is: " << xend << std::endl;
 		pfile << "The number of spatial points is: " << npoints << std::endl;
-		pfile << "The central value phi0 is: " << phi0 << std::endl;
+		pfile << "The central scalar field value is: " << phi0 << std::endl;
 		pfile << std::setprecision(16);
 		pfile << "The frequency w value is: " << shooter.bstar.omega << std::endl;
 		pfile.close();

@@ -10,7 +10,9 @@ void read_raw_domains(const std::string &file_name, std::vector<int> &nx, std::v
 
 int main(int argc, char const *argv[]){
 	std::string inp_name = "Setup_init_sol";
+	std::string out_folder = "Test_solution";
 	std::string domains_file;
+
 	for(int i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-in") == 0){
 			inp_name = argv[i+1];
@@ -29,6 +31,8 @@ int main(int argc, char const *argv[]){
 	std::vector<int> nx = {80, 20};
 	std::vector<double> bound = {0.0, 20.0, 50.0};
 
+	read_raw_domains("Setup_init/domains.dat", nx, bound);
+
 	if(!domains_file.empty())
 		read_raw_domains("../" + domains_file, nx, bound);
 
@@ -36,12 +40,12 @@ int main(int argc, char const *argv[]){
 	star.set_doubling_begin({false, false, false});
 
 	Boson_Star_Solver solver(&star);
-
-	star.load_spline("../" + inp_name);
+	solver.load_spline("Setup_init");
 	solver.solve();
 
-	std::string folder_name("Test_solution");
+	std::string folder_name(out_folder);
 	star.save(folder_name);
+	solver.save_csv(folder_name + "/fields.csv", 0.0, 15.0, 1001);
 	solver.save_function_to_file(folder_name + "/Residual", &Boson_Star_Equations::residual, 1, true);
 
 	return 0;

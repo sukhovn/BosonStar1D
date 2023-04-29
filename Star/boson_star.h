@@ -22,6 +22,8 @@ private:
 	double residual_error;
 
 	Parameter_File pfile;
+	void read_parameters(const std::string &folder_name);
+	void record_parameters(const std::string &folder_name);
 
 public:
 	double coordinate_komar_radius;
@@ -30,14 +32,8 @@ public:
 	//Standard constructor
 	Boson_Star(const std::vector<int> &nxi, const std::vector<double> &boundi);
 
-	Boson_Star &operator<<(const Parameter_File &reader);
-	void operator>>(Parameter_File &reader) const;
-	
-	void load_spline(const std::string &folder_name);
-
 	void load(const std::string &folder_name){
-		pfile.read_file(folder_name + "/parameters.dat");
-		*this << pfile;
+		read_parameters(folder_name);
 		Container::load(folder_name);
 		return;
 	}
@@ -46,17 +42,15 @@ public:
 	Boson_Star(const std::string &folder_name);
 
 	//Copy constructor
-	Boson_Star(const Boson_Star &star);
+	// Boson_Star(const Boson_Star &star);
 
-	Boson_Star &operator=(const Boson_Star &star);
+	// Boson_Star &operator=(const Boson_Star &star);
 
 	//Saves star solution
 	void save(const std::string &folder_name){
 		std::cout << "Saving the solution\n";
 		Container::save(folder_name);
-		
-		*this >> pfile;
-		pfile.print_file(folder_name + "/parameters.dat");
+		record_parameters(folder_name);
 	}
 
 	friend class Boson_Star_Solver;
@@ -77,6 +71,8 @@ public:
 		const std::vector<double> &boundaries = star->boundaries();
 		cc = 1.0/(boundaries[boundaries.size()-1] - boundaries[boundaries.size()-2]);
 	};
+
+	void load_spline(const std::string &folder_name);
 
 	int solve(void){
 		std::cout << "Solving star equations" << std::endl;

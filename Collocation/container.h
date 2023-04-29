@@ -208,6 +208,8 @@ public:
 
 	friend class Point;
 	template<class>
+	friend class Coordinate_Compactified;
+	template<class>
 	friend class Point_Compactified;
 	template<class>
 	friend class Collocation_Solution;

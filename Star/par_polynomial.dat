@@ -1,11 +1,10 @@
 Name: Polynomial
 The potential polynomial coefficient %1d is: 0-3
 The gravitational constant kappa is: 4
-The compactification constant is: 5
-The frequency w value is: 6
-The central scalar field value is: 7
-The Misner-Sharp mass is: 8
-The star charge is: 9
-The star radius is: 10
-The maximal compactness is: 11
-Bound null geodesics present: 12
+The frequency w value is: 5
+The central scalar field value is: 6
+The Misner-Sharp mass is: 7
+The star charge is: 8
+The star radius is: 9
+The maximal compactness is: 10
+Bound null geodesics present: 11
