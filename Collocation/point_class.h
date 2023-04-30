@@ -99,7 +99,7 @@ public:
 	const Compactification &compact;
 
 	Coordinate_Compactified(const Compactification &comp_, const Container *cont):
-		compact(comp_), comp_end(cont->bound[cont->ndomains-1]), xend(cont->bound[cont->ndomains-1]) {};
+		compact(comp_), comp_end(cont->bound[cont->ndomains-1]), xend(cont->bound[cont->ndomains]) {};
 
 	double coord(double x){
 		if(x >= xend)

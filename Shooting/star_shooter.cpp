@@ -64,7 +64,7 @@ int main(int argc, char const *argv[]){
 	double *yint = new double[8];
 	for(int i = 0; i < 8; ++i) yint[i] = 0.0;
 
-	Boson_Star_Shooter shooter(1.0, 0.0, phi0, xst, xend);
+	Boson_Star_Shooter shooter(mass, sigma, phi0, xst, xend);
 	std::cout << "Lagrangian mass is: " << mass << std::endl;
 	std::cout << "Sigma is: " << sigma << std::endl;
 	std::cout << "End of integration domain is: " << xend << std::endl;
@@ -84,7 +84,6 @@ int main(int argc, char const *argv[]){
 		std::string file_out = folder_out + "/fields.csv";
 		save_grid(file_out.c_str(), 4, npoints, shooter.xarr, shooter.yarr);
 
-		// file_out = folder_out + "/parameters.dat";
 		std::ofstream pfile(folder_out + "/parameters.dat");
 		pfile << "The mass value is: " << mass << std::endl;
 		pfile << "The sigma value is: " << sigma << std::endl;

@@ -38,7 +38,7 @@ public:
 	}
 
 	void save_csv(const std::string &file_name, double xmin, double xmax, int npoints){
-		if(xmin < cont->bound[0] || xmax > cont->bound[cont->ndomains]){
+		if(xmin < cont->bound[0]){
 			std::cout << "Interpolation reaching beyond domain range" << std::endl;
 			throw("xmin or xmax out of bounds");
 		}
