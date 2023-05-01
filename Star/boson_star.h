@@ -5,6 +5,7 @@
 #include <collocation_solver.h>
 #include <equations.h>
 #include <fstream>
+#include <unordered_map>
 
 #ifndef BOSON_STAR_H
 #define BOSON_STAR_H
@@ -13,12 +14,7 @@
 
 class Boson_Star: public Container, public Boson_Star_Equations{
 private:
-	double phi0;
-	double msmass;
-	double charge;
-	double rad;
-	double compactness;
-	bool bound_null_geodesics;
+	std::unordered_map<std::string, double> params;
 
 	double residual_error;
 
@@ -27,7 +23,7 @@ private:
 	void record_parameters(const std::string &folder_name);
 
 public:
-	double coordinate_komar_radius;
+	double coordinate_radius;
 	double ps_length;
 
 	//Standard constructor
@@ -100,118 +96,7 @@ public:
 		cc = 1.0/(boundaries[boundaries.size()-1] - boundaries[boundaries.size()-2]);
 	}
 
-	void find_star_parameters(void){
-		Evaluator profile(*star);
-
-		//Finding the central value of the scalar field
-		double domain_start = star->boundaries()[0];
-		star->phi0 = profile(domain_start, 2);
-
-		//Evaluating mass and charge
-		double comp_bound = star->boundaries()[star->n_domains()-1];
-		double domain_end = star->boundaries()[star->n_domains()];
-		Evaluator mass_func(*star,2,[&profile, this, &comp_bound, &domain_end](int fn, double x){
-			if(x == domain_end)
-				return 0.0;
-
-			//Evaluating fields
-			double u = profile(x, 0);
-			double v = profile(x, 1);
-			double phi = profile(x, 2);
-			double dphi = profile.derivative(x, 2);
-
-			//Evaluating coordinate and rescaling factor;
-			double dx = 1.0;
-			if(x >= comp_bound){
-				dx = dxc(x - comp_bound);
-				x = comp_bound + xc(x - comp_bound);
-			}
-
-			if(fn == 0){
-				double dens = std::exp(-v)*std::pow(star->omega*phi, 2.0) + std::exp(-u)*std::pow(dphi/dx, 2.0) + star->vpot(phi*phi);
-				return 0.5*star->kappa*dens*x*x*dx;
-			}
-			if(fn == 1){
-				double dens = std::exp(0.5*(u-v))*star->omega*phi*phi;
-				return std::sqrt(2.0*star->kappa)*dens*x*x*dx;
-			}
-			std::cout << "Wrong density number" << std::endl;
-			throw("integral calculation error");
-		});
-		mass_func.integrate(0.0);
-
-		star->msmass = mass_func(domain_end, 0);
-		star->charge = mass_func(domain_end, 1);
-
-		//Evaluating radius
-		Coordinate_Compactified<Linear_Fractional_Compactification> coord(*this, star);
-		double xst_rad = domain_start, xend_rad = domain_end;
-		while(xend_rad - xst_rad > 1.0e-6){
-			double tmp = mass_func(0.5*(xst_rad+xend_rad), 0);
-			if(tmp > RAD_FRACTION*star->msmass)
-				xend_rad = 0.5*(xst_rad + xend_rad);
-			else
-				xst_rad = 0.5*(xst_rad + xend_rad);
-		}
-		star->rad = coord.coord(0.5*(xst_rad + xend_rad));
-
-		//Evaluating compactness
-		Evaluator mass_radius(*star,1,[&profile, this, &domain_end](int fn, double x){
-			if(x == domain_end)
-				return 0.0;
-
-			//Evaluating fields
-			double u = profile(x, 0);
-
-			return 0.5*(1.0 - std::exp(-u));
-		});
-
-		//Finding maximal compactness
-		auto lambda_comp = [&mass_radius](double x){return -mass_radius(x, 0);};
-		Minimization max_compactness(lambda_comp);
-		max_compactness.set_bracket(domain_start, 0.5*(domain_start+domain_end), domain_end);
-		max_compactness.brent();
-		star->compactness = -max_compactness.fmin;
-
-		std::cout << "Central value of the scalar field is: " << star->phi0 << std::endl;
-		std::cout << "Misner-Sharp mass is: " << star->msmass << std::endl;
-		std::cout << "Star charge is: " << star->charge << std::endl;
-		std::cout << RAD_FRACTION * 100.0 << "% mass reached at the radius " << star->rad << std::endl;
-		std::cout << "The solution has maximal compactness: " << star->compactness << std::endl;
-
-		//Checking if bound null geodesics are present
-		Evaluator effective_compactness(*star,1,[&profile, this, &domain_end, &comp_bound](int fn, double x){
-			if(x == domain_end)
-				return 2.0;
-
-			//Evaluating fields
-			double dv = profile.derivative(x, 1);
-
-			//Evaluating coordinate and rescaling factor;
-			double dx = 1.0;
-			if(x >= comp_bound){
-				dx = dxc(x - comp_bound);
-				x = comp_bound + xc(x - comp_bound);
-			}
-
-			return 2.0 - dv*x/dx;
-		});
-
-		auto lambda_geod = [&effective_compactness](double x){return effective_compactness(x);};
-		Minimization geodesic_condition(lambda_geod);
-		geodesic_condition.set_bracket(domain_start, 0.5*(domain_start+domain_end), domain_end);
-		geodesic_condition.brent();
-		if(geodesic_condition.fmin < 0.0){
-			std::cout << "The star solution contains bound null geodesics\n";
-			// std::cout << geodesic_condition.fmin << std::endl;
-			star->bound_null_geodesics = true;
-		}
-		else{
-			std::cout << "The star solution does not contain bound null geodesics\n";
-			// std::cout << geodesic_condition.fmin << std::endl;
-			star->bound_null_geodesics = false;
-		}
-	}
+	void find_star_parameters(void);
 
 	int solve(void){
 		std::cout << "Solving star equations" << std::endl;
@@ -224,6 +109,65 @@ public:
 		std::cout << "The residual maximum is: " << star->residual_error << std::endl;
 
 		find_star_parameters();
+		return 0;
+	}
+
+	template<class Parameter_Calculator>
+	int parameter_change(Parameter_Calculator &calc, double par_new){
+		double par = calc.calculate_parameter(star);
+		double par_past = par;
+		double mult_coef, direction;
+		int ord = 1;
+
+		if(par_new > par){
+			direction = 1.0;
+			mult_coef = 1.1;
+		}
+		else{
+			direction = -1.0;
+			mult_coef = 0.9;
+		}
+
+		std::cout << "Starting at multiplication coefficient " << mult_coef << std::endl;
+
+		while(1){
+			std::cout << std::endl << "Solving for " + calc.name + ": " << par << std::endl;
+			if(solve() != 0){
+				if(par == par_past){
+					std::cout << "Star incorrectly initialized" << std::endl;
+					return -1;
+				}
+				mult_coef = std::sqrt(mult_coef);
+				par = par_past * mult_coef;
+				calc.update_parameter(star, par);
+				std::cout << std::endl << "Changing multiplication coefficient to " << mult_coef << std::endl;
+				ord++;
+			}
+			else{
+				par_past = par;
+				par *= mult_coef;
+				calc.update_parameter(star, par);
+			}
+			if(ord > 10){
+				std::cout << std::endl << "Minimal increment in " + calc.name + " reached, terminating" << std::endl;
+				return 1;
+			}
+			if((par_new - par) * direction < 0.0){
+				par = par_new;
+				calc.update_parameter(star, par);
+				std::cout << std::endl << "Solving for " + calc.name + " = " << par << std::endl;
+				if(solve() == 0)
+					break;
+				else{
+					while((par_new - par_past * mult_coef) * direction < 0.0)
+						mult_coef = std::sqrt(mult_coef);
+					par = par_past * mult_coef;
+					calc.update_parameter(star, par);
+				}
+			}
+		}
+
+		std::cout << std::endl << "We reached " + calc.name + " value of " << par << std::endl;
 		return 0;
 	}
 

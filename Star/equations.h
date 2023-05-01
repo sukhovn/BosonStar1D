@@ -1,6 +1,8 @@
 #include <cmath>
 #include <limits>
 
+#ifndef EQUATIONS_H
+#define EQUATIONS_H
 
 class Linear_Fractional_Compactification{
 public:
@@ -118,3 +120,5 @@ public:
 		return std::exp(-phi[0])*(ddphi[1] + 0.5*(dphi[1] - dphi[0])*(2.0/x + dphi[1])) - 2.0*kappa*dense;
 	}
 };
+
+#endif

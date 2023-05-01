@@ -30,8 +30,6 @@ template<class Compactification, class Equations_Class>
 class Collocation_Solver: public Collocation_Solution<Compactification>{
 private:
 	Collocation_Matrix colm;
-	double eqn_error;
-	int iterations;
 	const Equations_Class *eq_system;
 
 	using Collocation_Solution<Compactification>::cont;
@@ -376,6 +374,9 @@ private:
 	}
 
 public:
+	double eqn_error;
+	int iterations;
+
 	int solve(void){
 		int code;
 		double err, stepmax;

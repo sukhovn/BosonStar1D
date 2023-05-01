@@ -30,14 +30,14 @@ void Boson_Star::read_parameters(const std::string &folder_name){
 	}
 
 	kappa = pfile[shift+0];
-	omega = pfile[shift+1];
+	params["omega"] = omega = pfile[shift+1];
 	
-	phi0 = pfile[shift+2];
-	msmass = pfile[shift+3];
-	charge = pfile[shift+4];
-	rad = pfile[shift+5];
-	compactness = pfile[shift+6];
-	bound_null_geodesics = pfile[shift+7];
+	params["phi0"] = pfile[shift+2];
+	params["mass"] = pfile[shift+3];
+	params["charge"] = pfile[shift+4];
+	params["radius"] = pfile[shift+5];
+	params["compactness"] = pfile[shift+6];
+	params["bound_null_geodesics"] = pfile[shift+7];
 }
 
 void Boson_Star::record_parameters(const std::string &folder_name){
@@ -68,25 +68,29 @@ void Boson_Star::record_parameters(const std::string &folder_name){
 	}
 
 	pfile[shift+0] = kappa;
-	pfile[shift+1] = omega;
-	pfile[shift+2] = phi0;
-	pfile[shift+3] = msmass;
-	pfile[shift+4] = charge;
-	pfile[shift+5] = rad;
-	pfile[shift+6] = compactness;
-	pfile[shift+7] = (double) bound_null_geodesics;
+	pfile[shift+1] = params["omega"];
+
+	pfile[shift+2] = params["phi0"];
+	pfile[shift+3] = params["mass"];
+	pfile[shift+4] = params["charge"];
+	pfile[shift+5] = params["radius"];
+	pfile[shift+6] = params["compactness"];
+	pfile[shift+7] = params["bound_null_geodesics"];
+
 	pfile.print_file(folder_name + "/parameters.dat");
 }
 
 Boson_Star::Boson_Star(const std::vector<int> &nxi, const std::vector<double> &boundi):
 	Boson_Star_Equations(), Container(3, nxi, boundi),
+	params({{"omega", 1.0}, {"phi0", 0.0}, {"mass", 0.0}, {"charge", 0.0}, {"radius", 0.0}, {"compactness", 0.0}, {"bound_null_geodesics", 0.0}}),
 	pfile((const char*) __Star_par_solitonic_dat, __Star_par_solitonic_dat_len),
-	coordinate_komar_radius(0.0), ps_length(0.0) {};
+	coordinate_radius(0.0), ps_length(0.0) {};
 
 Boson_Star::Boson_Star(const std::string &folder_name):
 	Boson_Star_Equations(), Container(folder_name),
+	params({{"omega", 1.0}, {"phi0", 0.0}, {"mass", 0.0}, {"charge", 0.0}, {"radius", 0.0}, {"compactness", 0.0}, {"bound_null_geodesics", 0.0}}),
 	pfile((const char*) __Star_par_solitonic_dat, __Star_par_solitonic_dat_len),
-	coordinate_komar_radius(0.0), ps_length(0.0)
+	coordinate_radius(0.0), ps_length(0.0)
 {
 	load(folder_name);
 };
@@ -209,4 +213,119 @@ void Boson_Star_Solver::load_spline(const std::string &folder_name){
 	for(int i = 0; i < nfields; ++i) delete [] fields[i];
 	delete [] fields;
 	delete [] xcoord;
+}
+
+void Boson_Star_Solver::find_star_parameters(void){
+	star->params["omega"] = star->omega;
+	Evaluator profile(*star);
+
+	//Finding the central value of the scalar field
+	double domain_start = star->boundaries()[0];
+	star->params["phi0"] = profile(domain_start, 2);
+
+	//Evaluating mass and charge
+	double comp_bound = star->boundaries()[star->n_domains()-1];
+	double domain_end = star->boundaries()[star->n_domains()];
+	Evaluator mass_func(*star,2,[&profile, this, &comp_bound, &domain_end](int fn, double x){
+		if(x == domain_end)
+			return 0.0;
+
+		//Evaluating fields
+		double u = profile(x, 0);
+		double v = profile(x, 1);
+		double phi = profile(x, 2);
+		double dphi = profile.derivative(x, 2);
+
+		//Evaluating coordinate and rescaling factor;
+		double dx = 1.0;
+		if(x >= comp_bound){
+			dx = dxc(x - comp_bound);
+			x = comp_bound + xc(x - comp_bound);
+		}
+
+		if(fn == 0){
+			double dens = std::exp(-v)*std::pow(star->omega*phi, 2.0) + std::exp(-u)*std::pow(dphi/dx, 2.0) + star->vpot(phi*phi);
+			return 0.5*star->kappa*dens*x*x*dx;
+		}
+		if(fn == 1){
+			double dens = std::exp(0.5*(u-v))*star->omega*phi*phi;
+			return std::sqrt(2.0*star->kappa)*dens*x*x*dx;
+		}
+		std::cout << "Wrong density number" << std::endl;
+		throw("integral calculation error");
+	});
+	mass_func.integrate(0.0);
+
+	star->params["mass"] = mass_func(domain_end, 0);
+	star->params["charge"] = mass_func(domain_end, 1);
+
+	//Evaluating radius
+	Coordinate_Compactified<Linear_Fractional_Compactification> coord(*this, star);
+	double xst_rad = domain_start, xend_rad = domain_end;
+	while(xend_rad - xst_rad > 1.0e-6){
+		double tmp = mass_func(0.5*(xst_rad+xend_rad), 0);
+		if(tmp > RAD_FRACTION*star->params["mass"])
+			xend_rad = 0.5*(xst_rad + xend_rad);
+		else
+			xst_rad = 0.5*(xst_rad + xend_rad);
+	}
+	star->coordinate_radius = 0.5*(xst_rad + xend_rad);
+	star->params["radius"] = coord.coord(star->coordinate_radius);
+
+	//Evaluating compactness
+	Evaluator mass_radius(*star,1,[&profile, this, &domain_end](int fn, double x){
+		if(x == domain_end)
+			return 0.0;
+
+		//Evaluating fields
+		double u = profile(x, 0);
+
+		return 0.5*(1.0 - std::exp(-u));
+	});
+
+	//Finding maximal compactness
+	auto lambda_comp = [&mass_radius](double x){return -mass_radius(x, 0);};
+	Minimization max_compactness(lambda_comp);
+	max_compactness.set_bracket(domain_start, 0.5*(domain_start+domain_end), domain_end);
+	max_compactness.brent();
+	star->params["compactness"] = -max_compactness.fmin;
+
+	std::cout << "Central value of the scalar field is: " << star->params["phi0"] << std::endl;
+	std::cout << "Misner-Sharp mass is: " << star->params["mass"] << std::endl;
+	std::cout << "Star charge is: " << star->params["charge"] << std::endl;
+	std::cout << RAD_FRACTION * 100.0 << "% mass reached at the radius " << star->params["radius"] << std::endl;
+	std::cout << "The solution has maximal compactness: " << star->params["compactness"] << std::endl;
+
+	//Checking if bound null geodesics are present
+	Evaluator effective_compactness(*star,1,[&profile, this, &domain_end, &comp_bound](int fn, double x){
+		if(x == domain_end)
+			return 2.0;
+
+		//Evaluating fields
+		double dv = profile.derivative(x, 1);
+
+		//Evaluating coordinate and rescaling factor;
+		double dx = 1.0;
+		if(x >= comp_bound){
+			dx = dxc(x - comp_bound);
+			x = comp_bound + xc(x - comp_bound);
+		}
+
+		return 2.0 - dv*x/dx;
+	});
+
+	auto lambda_geod = [&effective_compactness](double x){return effective_compactness(x);};
+	Minimization geodesic_condition(lambda_geod);
+	geodesic_condition.set_bracket(domain_start, 0.5*(domain_start+domain_end), domain_end);
+	geodesic_condition.brent();
+	if(geodesic_condition.fmin < 0.0){
+		std::cout << "The star solution contains bound null geodesics\n";
+		// std::cout << geodesic_condition.fmin << std::endl;
+		star->params["bound_null_geodesics"] = 1.0;
+	}
+	else{
+		std::cout << "The star solution does not contain bound null geodesics\n";
+		// std::cout << geodesic_condition.fmin << std::endl;
+		star->params["bound_null_geodesics"] = 0.0;
+	}
 }
