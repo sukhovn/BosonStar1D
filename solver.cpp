@@ -9,7 +9,7 @@
 void read_raw_domains(const std::string &file_name, std::vector<int> &nx, std::vector<double> &bound);
 
 int main(int argc, char const *argv[]){
-	std::string inp_name = "Setup_init_sol";
+	std::string inp_name = "Setup_init";
 	std::string out_folder = "Test_solution";
 	std::string domains_file;
 
@@ -40,13 +40,30 @@ int main(int argc, char const *argv[]){
 	star.set_doubling_begin({false, false, false});
 
 	Boson_Star_Solver solver(&star);
-	solver.load_spline("Setup_init");
+	solver.load_spline(inp_name);
 	solver.solve();
 
 	std::string folder_name(out_folder);
 	star.save(folder_name);
 	solver.save_csv(folder_name + "/fields.csv", 0.0, 15.0, 1001);
 	solver.save_function_to_file(folder_name + "/Residual", &Boson_Star_Equations::residual, 1, true);
+	std::cout << std::endl;
+
+	// nx = {70, 40};
+	// bound = {0.0, 5.0, 10.0};
+	nx = {15, 70, 20};
+	bound = {0.0, 2.0, 15.0, 25.0};
+	// nx = {25, 70, 25};
+	// bound = {0.0, 1.0, 10.0, 20.0};
+
+	Boson_Star star2(star);
+	star2.regrid_solution(nx, bound);
+
+	solver.change_star(&star2);
+	solver.solve();
+	star2.save("Test_solution2");
+	solver.save_csv("Test_solution2/fields.csv", 0.0, 15.0, 1001);
+	solver.save_function_to_file("Test_solution2/Residual", &Boson_Star_Equations::residual, 1, true);
 
 	return 0;
 }

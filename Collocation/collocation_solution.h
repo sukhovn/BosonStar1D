@@ -16,6 +16,11 @@ public:
 	Collocation_Solution(const Compactification &compact_, Container *conti):
 		compact(compact_), cont(conti), pnt(compact_, conti) {};
 
+	void change_container(Container *cont_change){
+		pnt.change_container(cont_change);
+		cont = cont_change;
+	}
+
 	template<class Callable>
 	void fill_seed(Callable func, double value_at_infinity = 0.0){
 		int indx = 0;
@@ -56,6 +61,7 @@ public:
 		Evaluator evol(*cont);
 		Coordinate_Compactified<Compactification> coord(compact, cont);
 
+		out << std::setprecision(16);
 		for(int i = 0; i < npoints; ++i){
 			x_c = coord.comp_coord(x);
 

@@ -117,11 +117,14 @@ public:
 	// Changes domains configuration
 	void regrid(const Container *cont){
 		nfunc = cont->nfunc; ndomains = cont->ndomains; nx = cont->nx;
-		index_st = cont->index_st; bound = cont->bound; sz = cont->sz;
+		index_st = cont->index_st; bound = cont->bound;
 		parity_st = cont->parity_st; parity_end = cont->parity_end;
-		matr.resize(sz, sz);
-		rhs.resize(sz);
-		delta.resize(sz);
+		if(sz != cont->sz){
+			sz = cont->sz;
+			matr.resize(sz, sz);
+			rhs.resize(sz);
+			delta.resize(sz);
+		}
 		matr.setZero();
 		rhs.setZero();
 		delta.setZero();

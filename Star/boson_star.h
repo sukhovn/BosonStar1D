@@ -42,16 +42,34 @@ public:
 	//Load from file constructor
 	Boson_Star(const std::string &folder_name);
 
-	//Copy constructor
-	// Boson_Star(const Boson_Star &star);
-
-	// Boson_Star &operator=(const Boson_Star &star);
-
 	//Saves star solution
 	void save(const std::string &folder_name){
 		std::cout << "Saving the solution\n";
 		Container::save(folder_name);
 		record_parameters(folder_name);
+	}
+
+	void regrid_solution(const std::vector<int> &_nx, const std::vector<double> &_bound){
+		double comp_bound = boundaries()[n_domains()-1];
+		double domain_end = boundaries()[n_domains()];
+		Linear_Fractional_Compactification compact_old(1.0/(domain_end - comp_bound));
+		Coordinate_Compactified<Linear_Fractional_Compactification> coord_old(compact_old, this);
+
+		Evaluator profile(*this);
+		adjust_partitioning(_nx, _bound);
+
+		comp_bound = boundaries()[n_domains()-1];
+		domain_end = boundaries()[n_domains()];
+		Linear_Fractional_Compactification compact_new(1.0/(domain_end - comp_bound));
+		Coordinate_Compactified<Linear_Fractional_Compactification> coord_new(compact_new, this);
+
+		auto lambda = [&profile, &coord_old, &coord_new, &domain_end](int fn, double x){
+			if(x == domain_end)
+				return 0.0;
+			return profile(coord_old.comp_coord(coord_new.coord(x)), fn);
+		};
+
+		fill_function(lambda);
 	}
 
 	friend class Boson_Star_Solver;
@@ -75,17 +93,21 @@ public:
 
 	void load_spline(const std::string &folder_name);
 
-	// void change_star(Boson_Star *stari){
-	// 	star = stari;
-	// 	eq_system = stari;
-	// 	change_container(*stari);
-	// }
+	void change_star(Boson_Star *star_){
+		star = star_;
+		change_container(star_, star_);
+		const std::vector<double> &boundaries = star->boundaries();
+		cc = 1.0/(boundaries[boundaries.size()-1] - boundaries[boundaries.size()-2]);
+	}
 
 	void find_star_parameters(void){
 		Evaluator profile(*star);
 
-		//Evaluating mass and charge
+		//Finding the central value of the scalar field
 		double domain_start = star->boundaries()[0];
+		star->phi0 = profile(domain_start, 2);
+
+		//Evaluating mass and charge
 		double comp_bound = star->boundaries()[star->n_domains()-1];
 		double domain_end = star->boundaries()[star->n_domains()];
 		Evaluator mass_func(*star,2,[&profile, this, &comp_bound, &domain_end](int fn, double x){
@@ -151,6 +173,7 @@ public:
 		max_compactness.brent();
 		star->compactness = -max_compactness.fmin;
 
+		std::cout << "Central value of the scalar field is: " << star->phi0 << std::endl;
 		std::cout << "Misner-Sharp mass is: " << star->msmass << std::endl;
 		std::cout << "Star charge is: " << star->charge << std::endl;
 		std::cout << RAD_FRACTION * 100.0 << "% mass reached at the radius " << star->rad << std::endl;

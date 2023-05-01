@@ -180,6 +180,12 @@ public:
 	Collocation_Solver(const Compactification &compact, const Equations_Class *eq_sys, Container *conti):
 		Collocation_Solution<Compactification> (compact, conti), eq_system(eq_sys), colm(conti) {};
 
+	void change_container(Container *cont_change,	const Equations_Class *eq_system_change){
+		Collocation_Solution<Compactification>::change_container(cont_change);
+		colm.regrid(cont_change);
+		eq_system = eq_system_change;
+	}
+
 	template<bool FILL_RHS, bool FILL_JACOBIAN>
 	void collocation_fill(){
 		int ist, iend;

@@ -26,6 +26,16 @@ public:
 		delete [] phi; delete [] dphi; delete [] ddphi;
 	}
 
+	void change_container(const Container *cont_change){
+		if(cont_change->nfunc != cont->nfunc){
+			delete [] phi; delete [] dphi; delete ddphi;
+			phi = new double[cont_change->nfunc];
+			dphi = new double[cont_change->nfunc];
+			ddphi = new double[cont_change->nfunc];
+		}
+		cont = cont_change;
+	}
+
 	void get_point_fields_only(unsigned int dmi, unsigned int indi){
 		if(indi >= cont->nx[dmi]){
 			std::cout << "Point " << indi << " is out of range " << cont->nx[dmi]-1 << " in domain " << dmi << "\n";
