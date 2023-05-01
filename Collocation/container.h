@@ -150,6 +150,7 @@ public:
 	int n_x(int i) const{return nx[i];}
 	int size() const{return sz;}
 
+	const std::vector<int> &n_x() const{return nx;}
 	const std::vector<double> &boundaries() const {return bound;}
 	const double &operator[](int i) const {return data[i];}
 	double &operator[](int i){return data[i];}

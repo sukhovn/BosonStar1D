@@ -14,15 +14,15 @@
 
 class Boson_Star: public Container, public Boson_Star_Equations{
 private:
-	std::unordered_map<std::string, double> params;
-
-	double residual_error;
-
 	Parameter_File pfile;
 	void read_parameters(const std::string &folder_name);
 	void record_parameters(const std::string &folder_name);
 
 public:
+	std::unordered_map<std::string, double> params;
+
+	double residual_error;
+
 	double coordinate_radius;
 	double ps_length;
 

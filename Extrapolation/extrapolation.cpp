@@ -44,7 +44,7 @@ Solution_Saver::Solution_Saver(const std::string &file_name, bool append) : is_o
 //This routine stores solution for parameter recorder
 Solution_Saver& Solution_Saver::operator<< (const Boson_Star& star){
 	if(is_on){
-		std::cout << "Saving star solution\n";
+		std::cout << "Recording star solution\n";
 		out << star.ps_length;
 		for(std::string par : save_parameters)
 			out << ',' << star.params.at(par);
@@ -54,10 +54,10 @@ Solution_Saver& Solution_Saver::operator<< (const Boson_Star& star){
 }
 
 
-Extrapolation::Extrapolation(const Boson_Star &sol, int num):
+Extrapolation::Extrapolation(const Boson_Star &sol, int num, const std::string &_save_folder):
 	Boson_Star_Solver(new Boson_Star(sol)), sol_num(num), is_initialized(false),
 	ps_length_components({"omega", "mass", "phi0"}),
-	max_compactness(0.0), bound_null_geodesics(false)
+	save_folder(_save_folder)
 {
 	sol_current = star;
 	sol_array = new Boson_Star*[num];
@@ -190,6 +190,35 @@ int Extrapolation::extrapolate_solution(double *param_array, const double param)
 	return 0;
 }
 
+int Extrapolation::regrid_solutions(const std::vector<int> &_nx, const std::vector<double> &_bound){
+	std::cout << "New domains configuration:" << std::endl;
+	for(int i = 0; i < _nx.size(); ++i)
+		std::cout << _nx[i] << ", [" << _bound[i] << ',' << _bound[i+1] << ']' << std::endl;
+
+	Boson_Star **sol_backup = new Boson_Star*[sol_num];
+	for(int i = 0; i < sol_num; ++i){
+		std::cout << "\nRegridding solution: " << i << std::endl;
+		sol_backup[i] = new Boson_Star(*sol_array[i]);
+		sol_array[i]->regrid_solution(_nx, _bound);
+		change_star(sol_array[i]);
+		if(solve() != 0){
+			std::cout << "Regridding failed" << std::endl;
+			for(int j = 0; j <= i; ++j){
+				delete sol_array[j];
+				sol_array[j] = sol_backup[j];
+			}
+			change_star(sol_current);
+			delete [] sol_backup;
+			return 1;
+		}
+	}
+	std::cout << "\nRegridding was successful" << std::endl;
+	delete sol_current;
+	sol_current = new Boson_Star(*sol_array[sol_num-1]);
+	change_star(sol_current);
+	return 0;
+}
+
 int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 	bool sample_save = true;
 	double param_last = sol_current->ps_length;
@@ -229,11 +258,8 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 			if(iterations == 1) easy_steps++;
 			else easy_steps = 0;
 
-			//Tracking bound null geodesics star
-			bound_null_geodesics = sol_current->params["bound_null_geodesics"];
-
-			//Tracking maximal compactness
-			double comp_tmp = sol_current->params["bound_null_geodesics"];
+			for(auto cond = conditions.begin(); cond != conditions.end(); ++cond)
+				(*cond)->check_condition(*this);
 		}
 
 		//No further extrapolation termination
@@ -276,7 +302,7 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 	return 0;
 }
 
-int Extrapolation::pslenght_tracer(double increment, double pslength_end, const std::string &folder_path){
+int Extrapolation::pslenght_tracer(double increment, double pslength_end){
 	std::string file_name;
 	double omega_setup = -0.02;
 
@@ -289,56 +315,28 @@ int Extrapolation::pslenght_tracer(double increment, double pslength_end, const 
 
 	//Creating output folder
 	struct stat sttus = {0};
-	if (stat(folder_path.c_str(), &sttus) == -1) {
-    	mkdir(folder_path.c_str(), 0700);
+	if (stat(save_folder.c_str(), &sttus) == -1) {
+		mkdir(save_folder.c_str(), 0700);
 	}
 
-	file_name = folder_path + "/tracing.csv";
+	file_name = save_folder + "/tracing.csv";
 	Solution_Saver saver(file_name, false);
 	saver.on();
-
-	// std::string file_name;
-	// file_name = folder_path + "/max_compactness.dat";
-	// std::ofstream compactness_out(file_name);
 	
 	std::cout << "Tracing pslength\n";
 	if(param_change(pslength_end, saver)){
-		// compactness_out << "Maximal compactness for a stable solution reached: " << max_compactness << std::endl;
-		if(bound_null_geodesics){
-			// compactness_out << "Stars with bound null geodesics detected" << std::endl;
-			std::cout << "Stars with bound null geodesics detected" << std::endl;	
-		}
-		else{
-			// compactness_out << "No stars with bound null geodesics detected" << std::endl;
-			std::cout << "No stars with bound null geodesics detected" << std::endl;
-		}
-		// compactness_out.close();
+		std::cout << "\nTracing interrupted" << std::endl;
+		for(auto cond = conditions.begin(); cond != conditions.end(); ++cond)
+			(*cond)->final_action(*this, false);
 		return 1;
 	}
 
-	std::cout << "Tracing is finished\n";
+	std::cout << "\nTracing is finished" << std::endl;
 
-	file_name = folder_path + "/Final";
-	sol_current->save(file_name);
+	for(auto cond = conditions.begin(); cond != conditions.end(); ++cond)
+		(*cond)->final_action(*this, true);
 
-	double radius = 0.0;
-	while(radius < 100.0 && radius < sol_current->params.at("radius"))
-		radius += 5.0;
-
-	save_csv(file_name + "/fields.csv", 0.0, radius, 1001);
-	save_function_to_file(file_name + "/Residual", &Boson_Star_Equations::residual, 1, true);
-
-	// compactness_out << "Maximal compactness for a stable solution reached: " << max_compactness << std::endl;
-
-	if(bound_null_geodesics){
-		// compactness_out << "Stars with bound null geodesics detected" << std::endl;
-		std::cout << "Stars with bound null geodesics detected" << std::endl;	
-	}
-	else{
-		// compactness_out << "No stars with bound null geodesics detected" << std::endl;
-		std::cout << "No stars with bound null geodesics detected" << std::endl;
-	}
-
+	save_current_solution(save_folder + "/Final");
 
 	return 0;
 }

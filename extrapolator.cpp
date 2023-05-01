@@ -62,6 +62,7 @@ int main(int argc, char const *argv[]){
 	double sigma = 1.0;
 	double increment = 0.01;
 	double ps_end = 0.5;
+	std::string out_folder_name = "Tracing";
 
 	for(int i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-sigma") == 0){
@@ -117,9 +118,13 @@ int main(int argc, char const *argv[]){
 	else
 		solver.solve();
 
-	Extrapolation extra(star, 5);
-	std::string file_name = "Tracing";
-	extra.pslenght_tracer(increment, ps_end, file_name);
+	#include <conditions.h>
+
+	Extrapolation extra(star, 5, out_folder_name);
+	extra.conditions.push_back(&check_maximum_mass);
+	extra.conditions.push_back(&check_bound_null_geodesics);
+	// extra.conditions.push_back(&change_domain_size);
+	extra.pslenght_tracer(increment, ps_end);
 
 	return 0;
 }
