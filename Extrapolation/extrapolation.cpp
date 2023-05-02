@@ -35,7 +35,7 @@ Solution_Saver::Solution_Saver(const std::string &file_name, bool append) : is_o
 		out.open(file_name, std::ofstream::app);
 	else{
 		out.open(file_name);
-		out << head_line;
+		out << head_line << std::endl;
 	}
 
 	out << std::setprecision(15) << std::fixed;
@@ -83,11 +83,20 @@ int Extrapolation::initial_fill(const double dpar){
 	double omega_past = sol_current->omega, par_last = -1.0e5;
 	int ord = 1, sol_record = 0;
 
-	std::cout << "\nInitializing extrapolation\n";
+	for(int i = 0; i < 70; ++i)
+		std::cout << '*';
+	std::cout << std::endl;
+	std::cout << "Initializing extrapolation" << std::endl;;
 
 	while(1){
+		for(int i = 0; i < 70; ++i)
+			std::cout << '-';
+		std::cout << std::endl;
 		std::cout << "Solving for omega = " << sol_current->omega << "\n";
 		if(solve()){
+			for(int i = 0; i < 70; ++i)
+				std::cout << '-';
+			std::cout << std::endl;
 			mult_coef = std::sqrt(mult_coef);
 			std::cout << "Changing multiplication coefficient to " << mult_coef << "\n";
 			ord++;
@@ -106,8 +115,12 @@ int Extrapolation::initial_fill(const double dpar){
 					sol_current->ps_length = sol_array[sol_record-1]->ps_length + std::sqrt(dlen);
 				}
 
-				std::cout << "Recording the solution " << sol_record+1 << " out of " << sol_num << " with pseudolengh " << sol_current->ps_length << " for extrapolation\n\n";
+				std::cout << "Recording the solution " << sol_record+1 << " out of " << sol_num << " with pseudolengh " << sol_current->ps_length << " for extrapolation\n";
 				sol_array[sol_record] = new Boson_Star(*sol_current);
+
+				for(int i = 0; i < 70; ++i)
+					std::cout << '-';
+				std::cout << std::endl;
 
 				sol_record++;
 
@@ -123,7 +136,10 @@ int Extrapolation::initial_fill(const double dpar){
 		sol_current->omega = omega_past * mult_coef;
 	}
 
-	std::cout << "Extrapolation initialized\n\n";
+	std::cout << "Extrapolation initialized\n";
+	for(int i = 0; i < 70; ++i)
+		std::cout << '*';
+	std::cout << std::endl;
 
 	is_initialized = true;
 
@@ -135,7 +151,7 @@ int Extrapolation::extrapolate_solution(double *param_array, const double param)
 		std::cout << "The extrapolation has not been initialized, aborting\n";
 		return 1;
 	}
-	std::cout << "Attempting extrapolation to parameter value " << param << "\n";
+	std::cout << "Attempting extrapolation to pseudolength " << param << "\n";
 
 	double tmp, dyi;
 	Boson_Star *sol_pt;
@@ -191,6 +207,10 @@ int Extrapolation::extrapolate_solution(double *param_array, const double param)
 }
 
 int Extrapolation::regrid_solutions(const std::vector<int> &_nx, const std::vector<double> &_bound){
+	for(int i = 0; i < 70; ++i)
+		std::cout << '*';
+	std::cout << std::endl;
+
 	std::cout << "New domains configuration:" << std::endl;
 	for(int i = 0; i < _nx.size(); ++i)
 		std::cout << _nx[i] << ", [" << _bound[i] << ',' << _bound[i+1] << ']' << std::endl;
@@ -213,6 +233,10 @@ int Extrapolation::regrid_solutions(const std::vector<int> &_nx, const std::vect
 		}
 	}
 	std::cout << "\nRegridding was successful" << std::endl;
+	for(int i = 0; i < 70; ++i)
+		std::cout << '*';
+	std::cout << std::endl;
+
 	delete sol_current;
 	sol_current = new Boson_Star(*sol_array[sol_num-1]);
 	change_star(sol_current);
@@ -241,20 +265,36 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 		for(int i = 0; i < sol_num; i++)
 			param_array[i] = sol_array[i]->ps_length;
 
+		for(int i = 0; i < 70; ++i)
+			std::cout << '-';
+		std::cout << std::endl;
 		if(extrapolate_solution(param_array.data(), param_try) != 0){
+			for(int i = 0; i < 70; ++i)
+				std::cout << '-';
+			std::cout << std::endl;
+
+			for(int i = 0; i < 70; ++i)
+				std::cout << '+';
+			std::cout << std::endl;
 			mult_coef = std::sqrt(mult_coef);
 			std::cout << "Changing multiplication coefficient to " << mult_coef << "\n";
 			fails++;
+			for(int i = 0; i < 70; ++i)
+				std::cout << '+';
+			std::cout << std::endl;
 		}
 		else{
-			std::cout << "The residual error is: " << sol_current->residual_error << std::endl;
+			saver << *sol_current;
+			for(int i = 0; i < 70; ++i)
+				std::cout << '-';
+			std::cout << std::endl;
+
 			if(iterations > 2){
 				mult_coef = std::sqrt(mult_coef);
 				std::cout << "Too many iterations, changing multiplication coefficient to " << mult_coef << "\n";
 			}
 			param_last = sol_current->ps_length;
-			saver << *sol_current;
-			std::cout << std::endl;
+
 			if(iterations == 1) easy_steps++;
 			else easy_steps = 0;
 
@@ -264,7 +304,13 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 
 		//No further extrapolation termination
 		if(fails > MAX_FAILS){
+			for(int i = 0; i < 70; ++i)
+				std::cout << '+';
+			std::cout << std::endl;
 			std::cout << "Minimal increment is reached, terminating\n";
+			for(int i = 0; i < 70; ++i)
+				std::cout << '+';
+			std::cout << std::endl;
 			return 1;
 		}
 
@@ -286,11 +332,22 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 			param_try = param_new;
 			for(int i = 0; i < sol_num; i++)
 				param_array[i] = sol_array[i]->ps_length;
+
+			for(int i = 0; i < 70; ++i)
+				std::cout << '-';
+			std::cout << std::endl;
 			if(extrapolate_solution(param_array.data(), param_try) == 0){
 				saver << *sol_current;
+				for(int i = 0; i < 70; ++i)
+					std::cout << '-';
+				std::cout << std::endl;
 				break;
 			}
 			else{
+				for(int i = 0; i < 70; ++i)
+					std::cout << '-';
+				std::cout << std::endl;
+
 				fails++;
 				while((param_new - (param_last * mult_coef)) * direction < 0.0)
 					mult_coef = std::sqrt(mult_coef);
@@ -304,13 +361,6 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 
 int Extrapolation::pslenght_tracer(double increment, double pslength_end){
 	std::string file_name;
-	double omega_setup = -0.02;
-
-	if(initial_fill(omega_setup)){
-		std::cout << "Error in initial filling\n";
-		return 1;
-	}
-
 	stepper_increment = increment;
 
 	//Creating output folder
@@ -336,7 +386,7 @@ int Extrapolation::pslenght_tracer(double increment, double pslength_end){
 	for(auto cond = conditions.begin(); cond != conditions.end(); ++cond)
 		(*cond)->final_action(*this, true);
 
-	save_current_solution(save_folder + "/Final");
+	save_current_solution(save_folder + "/Final", 0);
 
 	return 0;
 }

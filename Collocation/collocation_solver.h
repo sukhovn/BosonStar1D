@@ -364,13 +364,13 @@ private:
 		// collocation_fill<true, false>();
 		// eqn_error = 0.5*colm.rhs.squaredNorm();
 
-		// std::cout << "Searching for the next step\n";
+		std::cout << "Searching for the next step" << std::endl;
 
 		code = lnsearch(stepmax);
 
 		iterations++;
 
-		return 0;//code;
+		return code;
 	}
 
 public:
