@@ -22,7 +22,7 @@ HEAD_LINK = $(patsubst %, -I%, $(HEAD_FOLDERS))
 
 CC = g++ # compiler to use
 CFLAGS = -c -g -O3 -fopenmp -Iobj $(HEAD_LINK) # flags to use at the compliation
-LINKERFLAG = -lm -lfftw3 -fopenmp
+LINKERFLAG = -lm -lfftw3 -fopenmp -lblas -llapack -llapacke
 BINARIES = $(LIB_BINS) $(COLLOCATION_BINS) $(STAR_BINS) $(EXTRA_BINS)
 
 all: prog

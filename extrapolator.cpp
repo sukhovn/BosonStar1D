@@ -5,6 +5,7 @@
 #include <extrapolation.h>
 #include <supplement.h>
 #include <schedule.h>
+#include <timer.h>
 
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -18,7 +19,11 @@ int main(int argc, char const *argv[]){
 	std::string load_stop, save_stop;
 
 	for(int i = 1; i < argc; i++){
-		if(strcmp(argv[i], "-ps_end") == 0){
+		if(strcmp(argv[i], "-wf") == 0){
+			work_folder_name = argv[i+1];
+			i++;
+		}
+		else if(strcmp(argv[i], "-ps_end") == 0){
 			ps_end = atof(argv[i+1]);
 			i++;
 		}
@@ -94,8 +99,12 @@ int main(int argc, char const *argv[]){
 	extra.conditions.push_back(&check_maximum_mass);
 	extra.conditions.push_back(&check_bound_null_geodesics);
 	extra.conditions.push_back(&schedule);
+	extra.conditions.push_back(&maximal_residual);
 
+	Timer timer;
 	extra.pslenght_tracer(ps_end);
+	timer.record();
+	std::cout << "The run took " << timer.last_period << std::endl;
 
 	extra.save_current_solution(work_folder_name + "/Final");
 

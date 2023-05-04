@@ -1,12 +1,12 @@
 #include <container.h>
 
-// #define EIGEN_SUPERLU_SUPPORT
-// #define EIGEN_USE_BLAS
-// #define EIGEN_USE_LAPACKE
+#define EIGEN_SUPERLU_SUPPORT
+#define EIGEN_USE_BLAS
+#define EIGEN_USE_LAPACKE
 
-// #define LAPACK_COMPLEX_CUSTOM
-// #define lapack_complex_float std::complex<float>
-// #define lapack_complex_double std::complex<double>
+#define LAPACK_COMPLEX_CUSTOM
+#define lapack_complex_float std::complex<float>
+#define lapack_complex_double std::complex<double>
 
 #include <eigen3/Eigen/Dense>
 

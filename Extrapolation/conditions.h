@@ -69,3 +69,21 @@ struct: public Extrapolation_Condition{
 	}
 
 } check_bound_null_geodesics;
+
+struct: public Extrapolation_Condition{
+	double residual_max;
+	double residual_max_ps_length;
+
+	void check_condition(Extrapolation &extra){
+		if(extra.sol_current->residual_error > residual_max){
+			residual_max = extra.sol_current->residual_error;
+			residual_max_ps_length = extra.sol_current->ps_length;
+		}
+	}
+
+	void final_action(Extrapolation &extra, bool normal_exit){
+		std::cout << "Maximal residual: " << residual_max << std::endl;
+		std::cout << "Maximal residual reached at pseudolength: " << residual_max_ps_length << std::endl;
+	}
+
+} maximal_residual;

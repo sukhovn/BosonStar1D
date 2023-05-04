@@ -58,7 +58,7 @@ Solution_Saver::Solution_Saver(const std::string &file_name, bool append) : is_o
 		out << head_line << std::endl;
 	}
 
-	out << std::setprecision(15) << std::fixed;
+	out << std::setprecision(16) << std::fixed;
 }
 
 //This routine stores solution for parameter recorder
@@ -161,8 +161,10 @@ int Extrapolation::initial_fill(const double dpar){
 		std::cout << '*';
 	std::cout << std::endl;
 
-	//Setting up multiplication coefficient
+	//Setting up tracing coefficient
 	mult_coef = mult_coef_max = 1.0 + stepper_increment;
+	fails = 1;
+	easy_steps = 0;
 
 	//Creating output folder
 	struct stat sttus = {0};
@@ -238,16 +240,38 @@ void Extrapolation::load_tracing_state(const std::string &folder_name){
 	change_star(sol_current);
 	std::cout << "Continuing tracing from pseudolength: " << sol_current->ps_length << std::endl;
 
-	//Inferring multiplication coefficient
-	mult_coef_max = 1.0 + stepper_increment;
-	mult_coef = sol_array[sol_num-1]->ps_length/sol_array[sol_num-2]->ps_length;
-
-	if(mult_coef >= mult_coef_max){
-		mult_coef = mult_coef_max;
-		std::cout << "Picking maximum multiplication coefficient: " << mult_coef << std::endl;
+	//Loading multiplication coefficient
+	mult_coef = 0.0;
+	fails = -1;
+	easy_steps = -1;
+	inp_file.open(save_folder + '/' + folder_name + "/save_parameters.dat");
+	if(!inp_file.is_open()){
+		std::cout << "Save parameters file not found" << std::endl;
+		throw("reading error");
+	}
+	while(std::getline(inp_file, line)){
+		std::istringstream iss(line);
+		std::getline(iss, token, ':');
+		if(token.compare("The multiplication coefficient is") == 0){
+			std::getline(iss, token, ':');
+			mult_coef = std::stod(token, &sztp);
+		}
+		if(token.compare("The fails parameter is") == 0){
+			std::getline(iss, token, ':');
+			fails = std::stoi(token, &sztp);
+		}
+		if(token.compare("The easy steps parameter is") == 0){
+			std::getline(iss, token, ':');
+			easy_steps = std::stoi(token, &sztp);
+		}
+	}
+	if(mult_coef == 0.0 || fails == -1 || easy_steps == -1){
+		std::cout << "The extrapolation parameters were not loaded" << std::endl;
+		throw("reading error");
 	}
 	else
 		std::cout << "Loading multiplication coefficient: " << mult_coef << std::endl;
+	inp_file.close();
 
 	//Preparing parameter recorder file
 	inp_file.open(save_folder + "/tracing.csv");
@@ -266,7 +290,7 @@ void Extrapolation::load_tracing_state(const std::string &folder_name){
 		catch(std::invalid_argument const& ex){
 			continue;
 		}
-		if(sol_array[values_found]->ps_length == tmp){
+		if(std::fabs(sol_array[values_found]->ps_length - tmp) < 1.0e-12){
 			if(values_found && prev_found != line_read-1){
 				std::cout << "Solutions " << values_found-1 << " and " << values_found << " are not continuous in the recorder file" << std::endl;
 				throw("reading error");
@@ -413,7 +437,6 @@ int Extrapolation::param_change(double param_new){
 
 	double param_last = sol_current->ps_length, param_try;
 	std::vector<double> param_array(sol_num);
-	int fails = 1, easy_steps = 0;
 
 	while(1){
 		param_try = param_last * mult_coef;
@@ -565,4 +588,12 @@ void Extrapolation::save_tracing_state(const std::string &folder_name){
 		param_file << "The pseudolength is: " << sol_array[i]->ps_length << std::endl;
 		param_file.close();
 	}
+
+	//Saving multiplication constant
+	param_file.open(folder_path + "/save_parameters.dat");
+	param_file << std::setprecision(16);
+	param_file << "The multiplication coefficient is: " << mult_coef << std::endl;
+	param_file << "The fails parameter is: " << fails << std::endl;
+	param_file << "The easy steps parameter is: " << easy_steps << std::endl;
+	param_file.close();
 }

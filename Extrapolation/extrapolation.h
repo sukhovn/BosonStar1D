@@ -44,6 +44,8 @@ class Extrapolation: public Boson_Star_Solver{
 	std::vector<std::string> ps_length_components;
 	double mult_coef;
 	double mult_coef_max;
+	int fails;
+	int easy_steps;
 
 public:
 	int sol_num;
