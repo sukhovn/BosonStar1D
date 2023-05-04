@@ -28,13 +28,33 @@ Solution_Saver::Solution_Saver(const std::string &file_name, bool append) : is_o
 		head_line = head_line + ',' + par;
 
 	//Creating or opening output files
-	std::ifstream f_test(file_name);
-	if(f_test.good() == false) append = false;
+	if(append){
+		std::ifstream f_test(file_name);
+		if(f_test.good() == false) append = false;
+		else{
+			std::string line;
+			std::getline(f_test, line);
+			if(line.compare(head_line) != 0){
+				std::cout << "Table save parameters mismatch" << std::endl;
+				throw("append error");
+			}
+			f_test.close();
+		}
+	}
 
-	if(append)
+	if(append){
 		out.open(file_name, std::ofstream::app);
+		if(!out.is_open()){
+			std::cout << "Solution saver file could not be opened" << std::endl;
+			throw("solution saver file open error");
+		}
+	}
 	else{
 		out.open(file_name);
+		if(!out.is_open()){
+			std::cout << "Solution saver file could not be opened" << std::endl;
+			throw("solution saver file open error");
+		}
 		out << head_line << std::endl;
 	}
 
@@ -55,7 +75,7 @@ Solution_Saver& Solution_Saver::operator<< (const Boson_Star& star){
 
 
 Extrapolation::Extrapolation(const Boson_Star &sol, int num, const std::string &_save_folder):
-	Boson_Star_Solver(new Boson_Star(sol)), sol_num(num), is_initialized(false),
+	Boson_Star_Solver(new Boson_Star(sol)), sol_num(num), is_initialized(false), saver(nullptr),
 	ps_length_components({"omega", "mass", "phi0"}),
 	save_folder(_save_folder)
 {
@@ -71,13 +91,13 @@ int Extrapolation::initial_fill(const double dpar){
 		return 1;
 	}
 
-	double mult_coef;
+	double mult_coef_init;
 
 	if(dpar > 0.0){
-		mult_coef = 1.0 + stepper_increment;
+		mult_coef_init = 1.0 + stepper_increment;
 	}
 	else{
-		mult_coef = 1.0 - stepper_increment;
+		mult_coef_init = 1.0 - stepper_increment;
 	}
 
 	double omega_past = sol_current->omega, par_last = -1.0e5;
@@ -97,8 +117,8 @@ int Extrapolation::initial_fill(const double dpar){
 			for(int i = 0; i < 70; ++i)
 				std::cout << '-';
 			std::cout << std::endl;
-			mult_coef = std::sqrt(mult_coef);
-			std::cout << "Changing multiplication coefficient to " << mult_coef << "\n";
+			mult_coef_init = std::sqrt(mult_coef_init);
+			std::cout << "Changing multiplication coefficient to " << mult_coef_init << "\n";
 			ord++;
 		}
 		else{
@@ -133,7 +153,7 @@ int Extrapolation::initial_fill(const double dpar){
 			return 1;
 			for(int i = 0; i < sol_record; i++) delete sol_array[i];
 		}
-		sol_current->omega = omega_past * mult_coef;
+		sol_current->omega = omega_past * mult_coef_init;
 	}
 
 	std::cout << "Extrapolation initialized\n";
@@ -141,12 +161,142 @@ int Extrapolation::initial_fill(const double dpar){
 		std::cout << '*';
 	std::cout << std::endl;
 
+	//Setting up multiplication coefficient
+	mult_coef = mult_coef_max = 1.0 + stepper_increment;
+
+	//Creating output folder
+	struct stat sttus = {0};
+	if(stat(save_folder.c_str(), &sttus) == -1){
+		mkdir(save_folder.c_str(), 0700);
+	}
+
+	//Setting up parameter saver
+	saver = new Solution_Saver(save_folder + "/tracing.csv", false);
+
 	is_initialized = true;
 
 	return 0;
 }
 
-int Extrapolation::extrapolate_solution(double *param_array, const double param){
+void Extrapolation::load_tracing_state(const std::string &folder_name){
+	if(is_initialized){
+		std::cout << "The extrapolation has already been initialized, aborting" << std::endl;
+		return;
+	}
+
+	for(int i = 0; i < 70; ++i)
+		std::cout << '*';
+	std::cout << std::endl;
+	std::cout << "Loading extrapolator state from folder: " + folder_name << std::endl;
+
+	//Counting number of saved solutions
+	std::string path;
+	int nfunc_load = 0;
+	struct stat sttus = {0};
+	while(1){
+		path = save_folder + '/' + folder_name + "/Solution_" + std::to_string(nfunc_load);
+		if(stat(path.c_str(), &sttus) == 0) nfunc_load++;
+		else break;
+	}
+	if(nfunc_load == 0){
+		std::cout << "No saved solutions found in folder: " << folder_name << std::endl;
+		throw("reading error");
+	}
+	std::cout << "Found " << nfunc_load << " solutions" << std::endl;
+	delete [] sol_array;
+	sol_num = nfunc_load;
+	sol_array = new Boson_Star*[sol_num];
+
+	//Reading solutions
+	std::ifstream inp_file;
+	std::string::size_type sztp;
+	std::string line, token;
+	for(int i = 0; i < sol_num; ++i){
+		path = save_folder + '/' + folder_name + "/Solution_" + std::to_string(i);
+		sol_array[i] = new Boson_Star(path);
+		sol_array[i]->ps_length = -1.0;
+		//Reading pseudolengths
+		inp_file.open(path + "/parameters.dat");
+		while(std::getline(inp_file, line)){
+			std::istringstream iss(line);
+			std::getline(iss, token, ':');
+			if(token.compare("The pseudolength is") == 0){
+				std::getline(iss, token, ':');
+				sol_array[i]->ps_length = std::stod(token, &sztp);
+				break;
+			}
+		}
+		inp_file.close();
+		if(sol_array[i]->ps_length == -1.0){
+			std::cout << "Pseudolength for solution " << i << " was not read" << std::endl;
+			throw("reading error");
+		}
+	}
+
+	delete sol_current;
+	sol_current = new Boson_Star(*sol_array[sol_num-1]);
+	change_star(sol_current);
+	std::cout << "Continuing tracing from pseudolength: " << sol_current->ps_length << std::endl;
+
+	//Inferring multiplication coefficient
+	mult_coef_max = 1.0 + stepper_increment;
+	mult_coef = sol_array[sol_num-1]->ps_length/sol_array[sol_num-2]->ps_length;
+
+	if(mult_coef >= mult_coef_max){
+		mult_coef = mult_coef_max;
+		std::cout << "Picking maximum multiplication coefficient: " << mult_coef << std::endl;
+	}
+	else
+		std::cout << "Loading multiplication coefficient: " << mult_coef << std::endl;
+
+	//Preparing parameter recorder file
+	inp_file.open(save_folder + "/tracing.csv");
+	std::ofstream out_file(save_folder + "/tracing_cont.csv");
+	double tmp;
+	int line_read = 0, values_found = 0, prev_found;
+	while(std::getline(inp_file, line)){
+		++line_read;
+		out_file << line << std::endl;
+		//Checking if line corresponds to one of the loaded solutions
+		std::istringstream iss(line);
+		std::getline(iss, token, ',');
+		try{
+			tmp = std::stod(token, &sztp);
+		}
+		catch(std::invalid_argument const& ex){
+			continue;
+		}
+		if(sol_array[values_found]->ps_length == tmp){
+			if(values_found && prev_found != line_read-1){
+				std::cout << "Solutions " << values_found-1 << " and " << values_found << " are not continuous in the recorder file" << std::endl;
+				throw("reading error");
+			}
+			else{
+				prev_found = line_read;
+				++values_found;
+			}
+			if(values_found == sol_num)
+				break;
+		}
+	}
+
+	if(values_found != sol_num){
+		std::cout << "Not enough solutions found in the recorder file" << std::endl;
+		throw("reading error");
+	}
+
+	out_file.close();
+	inp_file.close();
+	saver = new Solution_Saver(save_folder + "/tracing_cont.csv", true);
+
+	for(int i = 0; i < 70; ++i)
+		std::cout << '*';
+	std::cout << std::endl;
+
+	is_initialized = true;
+}
+
+int Extrapolation::extrapolate_solution(double *param_array, const double param, bool swap_solutions){
 	if(!is_initialized){
 		std::cout << "The extrapolation has not been initialized, aborting\n";
 		return 1;
@@ -195,18 +345,25 @@ int Extrapolation::extrapolate_solution(double *param_array, const double param)
 	std::cout << "The pseudolength is " << sol_current->ps_length << "\n";
 
 	//Interchanging solutions
-	delete sol_array[0];
+	if(swap_solutions){
+		delete sol_array[0];
 
-	for(int i = 0; i < sol_num-1; i++){
-		sol_array[i] = sol_array[i+1];
+		for(int i = 0; i < sol_num-1; i++){
+			sol_array[i] = sol_array[i+1];
+		}
+
+		sol_array[sol_num-1] = new Boson_Star(*sol_current);
 	}
-
-	sol_array[sol_num-1] = new Boson_Star(*sol_current);
 
 	return 0;
 }
 
 int Extrapolation::regrid_solutions(const std::vector<int> &_nx, const std::vector<double> &_bound){
+	if(!is_initialized){
+		std::cout << "The extrapolation has not been initialized, aborting\n";
+		return 1;
+	}
+
 	for(int i = 0; i < 70; ++i)
 		std::cout << '*';
 	std::cout << std::endl;
@@ -243,22 +400,20 @@ int Extrapolation::regrid_solutions(const std::vector<int> &_nx, const std::vect
 	return 0;
 }
 
-int Extrapolation::param_change(double param_new, Solution_Saver &saver){
-	bool sample_save = true;
-	double param_last = sol_current->ps_length;
-	double mult_coef, mult_coef_init, direction, param_try;
+int Extrapolation::param_change(double param_new){
+	if(!is_initialized){
+		std::cout << "The extrapolation has not been initialized, aborting\n";
+		return 1;
+	}
+
+	if(param_new <= sol_current->ps_length){
+		std::cout << "Required pseudolength is reached, no tracing is needed" << std::endl;
+		return 0;
+	}
+
+	double param_last = sol_current->ps_length, param_try;
 	std::vector<double> param_array(sol_num);
 	int fails = 1, easy_steps = 0;
-	bool max_comp_change = false;
-
-	if(param_new > param_last){
-		direction = 1.0;
-		mult_coef = mult_coef_init = 1.0 + stepper_increment;
-	}
-	else{
-		direction = -1.0;
-		mult_coef = mult_coef_init = 1.0 - stepper_increment;
-	}
 
 	while(1){
 		param_try = param_last * mult_coef;
@@ -268,7 +423,7 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 		for(int i = 0; i < 70; ++i)
 			std::cout << '-';
 		std::cout << std::endl;
-		if(extrapolate_solution(param_array.data(), param_try) != 0){
+		if(extrapolate_solution(param_array.data(), param_try, true) != 0){
 			for(int i = 0; i < 70; ++i)
 				std::cout << '-';
 			std::cout << std::endl;
@@ -284,7 +439,7 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 			std::cout << std::endl;
 		}
 		else{
-			saver << *sol_current;
+			*saver << *sol_current;
 			for(int i = 0; i < 70; ++i)
 				std::cout << '-';
 			std::cout << std::endl;
@@ -316,7 +471,7 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 
 		//If there were too many easy steps we increase the stepsize
 		if(easy_steps > 10){
-			if(mult_coef < mult_coef_init - 1.0e-6){
+			if(mult_coef < mult_coef_max - 1.0e-6){
 				mult_coef = std::pow(mult_coef, 2.0);
 				std::cout << "Increasing interpolation step, changing multiplication coefficient to " << mult_coef << std::endl;
 			}
@@ -325,8 +480,8 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 		}
 
 		//Termination condition
-		if((param_new - param_last * mult_coef) * direction < 0.0){
-			if((param_new - param_last) * direction < 0.0){
+		if(param_new - param_last * mult_coef < 0.0){
+			if(param_new - param_last < 0.0){
 				break;
 			}
 			param_try = param_new;
@@ -336,8 +491,8 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 			for(int i = 0; i < 70; ++i)
 				std::cout << '-';
 			std::cout << std::endl;
-			if(extrapolate_solution(param_array.data(), param_try) == 0){
-				saver << *sol_current;
+			if(extrapolate_solution(param_array.data(), param_try, false) == 0){
+				*saver << *sol_current;
 				for(int i = 0; i < 70; ++i)
 					std::cout << '-';
 				std::cout << std::endl;
@@ -349,7 +504,7 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 				std::cout << std::endl;
 
 				fails++;
-				while((param_new - (param_last * mult_coef)) * direction < 0.0)
+				while(param_new - (param_last * mult_coef) < 0.0)
 					mult_coef = std::sqrt(mult_coef);
 			}
 		}
@@ -359,22 +514,16 @@ int Extrapolation::param_change(double param_new, Solution_Saver &saver){
 	return 0;
 }
 
-int Extrapolation::pslenght_tracer(double increment, double pslength_end){
-	std::string file_name;
-	stepper_increment = increment;
-
-	//Creating output folder
-	struct stat sttus = {0};
-	if (stat(save_folder.c_str(), &sttus) == -1) {
-		mkdir(save_folder.c_str(), 0700);
+int Extrapolation::pslenght_tracer(double pslength_end){
+	if(!is_initialized){
+		std::cout << "The extrapolation has not been initialized, aborting\n";
+		return 1;
 	}
 
-	file_name = save_folder + "/tracing.csv";
-	Solution_Saver saver(file_name, false);
-	saver.on();
-	
+	saver->on();
 	std::cout << "Tracing pslength\n";
-	if(param_change(pslength_end, saver)){
+	std::cout << "Maximum multiplication coefficient set to: " << mult_coef_max << std::endl;
+	if(param_change(pslength_end)){
 		std::cout << "\nTracing interrupted" << std::endl;
 		for(auto cond = conditions.begin(); cond != conditions.end(); ++cond)
 			(*cond)->final_action(*this, false);
@@ -386,7 +535,34 @@ int Extrapolation::pslenght_tracer(double increment, double pslength_end){
 	for(auto cond = conditions.begin(); cond != conditions.end(); ++cond)
 		(*cond)->final_action(*this, true);
 
-	save_current_solution(save_folder + "/Final", 0);
-
 	return 0;
+}
+
+void Extrapolation::save_tracing_state(const std::string &folder_name){
+	if(!is_initialized){
+		std::cout << "The extrapolation has not been initialized, aborting\n";
+		return;
+	}
+
+	std::cout << "Saving extrapolator state to folder: " + folder_name << std::endl;
+	std::string folder_path = save_folder + '/' + folder_name;
+	//Creating output folder
+	struct stat sttus = {0};
+	if(stat(folder_path.c_str(), &sttus) == -1){
+		mkdir(folder_path.c_str(), 0700);
+	}
+
+	//Saving solutions
+	for(int i = 0; i < sol_num; ++i){
+		save_solution(folder_path + "/Solution_" + std::to_string(sol_num-i-1),i);
+	}
+
+	//Saving pseudolength to parameter files
+	std::ofstream param_file;
+	for(int i = 0; i < sol_num; ++i){
+		param_file.open(folder_path + "/Solution_" + std::to_string(i) + "/parameters.dat", std::ofstream::app);
+		param_file << std::setprecision(16);
+		param_file << "The pseudolength is: " << sol_array[i]->ps_length << std::endl;
+		param_file.close();
+	}
 }

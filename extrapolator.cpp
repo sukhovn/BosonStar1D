@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <cmath>
 #include <string.h>
 #include <boson_star.h>
@@ -5,12 +6,16 @@
 #include <supplement.h>
 #include <schedule.h>
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
+
 int main(int argc, char const *argv[]){
 	double sigma = 1.0;
 	double increment = 0.01;
 	double ps_end = 0.5;
 	std::string work_folder_name = "../Test_tracing";
-	std::string save_name = "Final";
+	std::string load_stop, save_stop;
 
 	for(int i = 1; i < argc; i++){
 		if(strcmp(argv[i], "-ps_end") == 0){
@@ -19,6 +24,14 @@ int main(int argc, char const *argv[]){
 		}
 		else if(strcmp(argv[i], "-increment") == 0){
 			increment = atof(argv[i+1]);
+			i++;
+		}
+		else if(strcmp(argv[i], "-load_stop") == 0){
+			load_stop = argv[i+1];
+			i++;
+		}
+		else if(strcmp(argv[i], "-save_stop") == 0){
+			save_stop = argv[i+1];
 			i++;
 		}
 		else{
@@ -44,35 +57,63 @@ int main(int argc, char const *argv[]){
 	}
 
 	Extrapolation extra(star, 5, work_folder_name);
+	extra.stepper_increment = increment;
 
-	//Checking scheduler entry if initial regridding is needed
-	if(schedule.schedule.find(0.0) != schedule.schedule.end() &&
-		(schedule.schedule.at(0.0).first != star.n_x() || schedule.schedule.at(0.0).second != star.boundaries())){
-		std::vector<int> nx = schedule.schedule.at(0.0).first;
-		std::vector<double> bound = schedule.schedule.at(0.0).second;
+	//Checking if the tracing is resumed from a stop
+	if(load_stop.empty()){
+		//Checking scheduler entry if initial regridding is needed
+		if(schedule.schedule.find(0.0) != schedule.schedule.end() &&
+			(schedule.schedule.at(0.0).first != star.n_x() || schedule.schedule.at(0.0).second != star.boundaries())){
+			std::vector<int> nx = schedule.schedule.at(0.0).first;
+			std::vector<double> bound = schedule.schedule.at(0.0).second;
 
-		std::cout << "Regridding starting solution to new domain configuration:" << std::endl;
-		for(int i = 0; i < nx.size(); ++i)
-			std::cout << nx[i] << ", [" << bound[i] << ',' << bound[i+1] << ']' << std::endl;
+			std::cout << "Regridding starting solution to new domain configuration:" << std::endl;
+			for(int i = 0; i < nx.size(); ++i)
+				std::cout << nx[i] << ", [" << bound[i] << ',' << bound[i+1] << ']' << std::endl;
 
-		extra.sol_current->regrid_solution(nx, bound);
-		extra.change_star(extra.sol_current);
+			extra.sol_current->regrid_solution(nx, bound);
+			extra.change_star(extra.sol_current);
+		}
+
+		extra.solve();
+
+		if(extra.initial_fill(-0.01)){
+			std::cout << "Error in initial filling\n";
+			return 1;
+		}
+
+		schedule.setup_scheduling(0.0);
+	}
+	else{
+		extra.load_tracing_state(load_stop);
+		schedule.setup_scheduling(extra.sol_current->ps_length);
 	}
 
-	extra.solve();
-
 	#include <conditions.h>
-	schedule.setup_scheduling();
+	check_maximum_mass.check_previous_max_save(work_folder_name + "/Maximal_mass");
 	extra.conditions.push_back(&check_maximum_mass);
 	extra.conditions.push_back(&check_bound_null_geodesics);
 	extra.conditions.push_back(&schedule);
 
-	if(extra.initial_fill(-0.01)){
-		std::cout << "Error in initial filling\n";
-		return 1;
+	extra.pslenght_tracer(ps_end);
+
+	extra.save_current_solution(work_folder_name + "/Final");
+
+	if(!load_stop.empty()){
+		std::string old_tracing_file = work_folder_name + "/tracing.csv";
+		std::string new_tracing_file = work_folder_name + "/tracing_cont.csv";
+		if(std::remove(old_tracing_file.c_str())){
+			std::cout << "Could not remove old tracing.csv file" << std::endl;
+			throw("file removing error");
+		}
+		if(std::rename(new_tracing_file.c_str(), old_tracing_file.c_str())){
+			std::cout << "Could not rename tracing.csv file" << std::endl;
+			throw("file removing error");
+		}
 	}
 
-	extra.pslenght_tracer(increment, ps_end);
+	if(!save_stop.empty())
+		extra.save_tracing_state(save_stop);
 
 	return 0;
 }

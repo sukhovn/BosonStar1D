@@ -23,7 +23,7 @@
 
 #define STPMX 100.0 //Maximal Newton step
 
-#define COLLOC_THRSHLD 1.0e-13
+#define COLLOC_THRSHLD 1.0e-12
 #define MAX_ITER 100 //Limit for maximal number of iterations
 
 template<class Compactification, class Equations_Class>

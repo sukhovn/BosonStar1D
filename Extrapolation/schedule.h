@@ -108,12 +108,13 @@ public:
 		}
 	}
 
-	void setup_scheduling(){
-		curr = schedule.find(0.0);
-		if(curr != schedule.end())
+	void setup_scheduling(double ps_length){
+		curr = schedule.begin();
+		while(curr != schedule.end()){
+			if(curr->first > ps_length)
+				break;
 			++curr;
-		else
-			curr = schedule.begin();
+		}
 	}
 
 	void check_condition(Extrapolation &extra){

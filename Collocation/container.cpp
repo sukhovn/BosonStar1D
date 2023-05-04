@@ -27,8 +27,12 @@ int count_func_files(const std::string &folder_name){
 	struct stat sttus = {0};
 	while(1){
 		path = folder_name + "/f" + std::to_string(nfunc_load) + ".dat";
-		if (stat(path.c_str(), &sttus) == -1) break;
-		else nfunc_load++;
+		if(stat(path.c_str(), &sttus) == 0) nfunc_load++;
+		else break;
+	}
+	if(nfunc_load == 0){
+		std::cout << "No function files found in folder: " << folder_name << std::endl;
+		throw("reading error");
 	}
 	return nfunc_load;
 }
